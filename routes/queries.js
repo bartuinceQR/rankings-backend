@@ -1,20 +1,5 @@
 const sqlite = require('./connect.js')
-
-function generateUUID() { // Public Domain/MIT
-	var d = new Date().getTime();//Timestamp
-	var d2 = (performance && performance.now && (performance.now()*1000)) || 0;//Time in microseconds since page-load or 0 if unsupported
-	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-		var r = Math.random() * 16;//random number between 0 and 16
-		if(d > 0){//Use timestamp until depleted
-			r = (d + r)%16 | 0;
-			d = Math.floor(d/16);
-		} else {//Use microseconds since page-load if supported
-			r = (d2 + r)%16 | 0;
-			d2 = Math.floor(d2/16);
-		}
-		return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-	});
-}
+const { v4: uuidv4 } = require('uuid');
 
 //completely arbitrary point function
 function scoreToPoint(sc_w){
@@ -39,7 +24,7 @@ function getUsers(req, res) {
 
 function createUser(req, res) {
   const {name, country} = req.body
-  const id = generateUUID();
+  const id = uuidv4();
   var pts = 0
   var rank = -1
   var query = 'SELECT COUNT(*) FROM users'
@@ -111,6 +96,7 @@ function scoreSubmit(req,res) {
 								stmt.run(user_id,score_worth,tstamp, user_id);
 								stmt.finalize();
 							}else{
+								//sending 200 because it's not really a BAD request, just an overambitious one
 								res.status(200).send("score is equal or higher");
 								return;
 							}
@@ -125,7 +111,8 @@ function scoreSubmit(req,res) {
 						stmt.finalize();
 
 						//now update rank for every other player we passed
-						//try not to have TOO large of a skill increase, you'll lag the servers!
+						//runs completely independently from the response, because it doesn't use anything outside the database
+						//if it fails to run then there's an issue with the database anyway
 						query = 'SELECT * FROM users WHERE points BETWEEN ? AND ?'
 						sqlite.db.serialize(function () {
 							sqlite.db.each(query, [oldpoints, newpoints], (err,row) => {
@@ -145,11 +132,12 @@ function scoreSubmit(req,res) {
 								query = 'UPDATE users SET rank = ? WHERE user_id = ?'
 								stmt = sqlite.db.prepare(query);
 								stmt.run([rank-ppl,user_id], function(err, row) {
-									res.status(200).send("done");
 									stmt.finalize();
 								});
 							});
 						});
+
+						res.status(200).send("done");
 					}); 
 				});
 			}
@@ -157,9 +145,35 @@ function scoreSubmit(req,res) {
    });
 }
 
+
+function fetchLeaderboard(req, res){
+	var query = 'SELECT rank, points, display_name, country FROM users ORDER BY rank ASC LIMIT 100';
+	sqlite.db.serialize(function() {
+		sqlite.db.all(query, [], (err,rows) => {
+			if (err) { throw err; }
+			res.status(200).send(rows);
+		});
+
+	});
+}
+
+
+function fetchLeaderboardByCountry(req, res){
+	const country = req.params.country;
+	var query = 'SELECT rank, points, display_name, country FROM users WHERE country = ? ORDER BY rank ASC LIMIT 100';
+	sqlite.db.serialize(function() {
+		sqlite.db.all(query, [country], (err,rows) => {
+			if (err) { throw err; }
+			res.status(200).send(rows);
+		});
+	});
+}
+
 module.exports = {
 	getUsers,
 	createUser,
 	getUserByGuid,
-	scoreSubmit
+	scoreSubmit,
+	fetchLeaderboard,
+	fetchLeaderboardByCountry
 }
