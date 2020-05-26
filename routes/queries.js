@@ -13,8 +13,7 @@ function getUsers(req, res) {
 	sqlite.db.all(query, [], (err, rows) => {
 		if (err) { throw err; }
 		rows.forEach((row) => {
-			console.log(row.display_name);
-			rettext += JSON.stringify(row);
+			rettext += JSON.stringify(row.display_name);
 		});
 		res.status(200).send(rettext);
 	});
@@ -118,7 +117,7 @@ function scoreSubmit(req,res) {
 							sqlite.db.each(query, [oldpoints, newpoints], (err,row) => {
 								if (err) { throw err;}
 								if (row.rank < rank && row.user_id != user_id) { // possibly avoids a problem with initial rankings
-									console.log(row.rank + " " + row.user_id);
+									//console.log(row.rank + " " + row.user_id);
 									ppl += 1;
 									var query2 = 'UPDATE users SET rank = ? WHERE user_id = ?';
 									sqlite.db.serialize(function() {
@@ -147,7 +146,8 @@ function scoreSubmit(req,res) {
 
 
 function fetchLeaderboard(req, res){
-	var query = 'SELECT rank, points, display_name, country FROM users ORDER BY rank ASC LIMIT 100';
+	//adding user_id here, since it's the only way to actually submit scores
+	var query = 'SELECT user_id, rank, points, display_name, country FROM users ORDER BY rank ASC LIMIT 100';
 	sqlite.db.serialize(function() {
 		sqlite.db.all(query, [], (err,rows) => {
 			if (err) { throw err; }
